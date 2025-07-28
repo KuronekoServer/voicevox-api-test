@@ -21,6 +21,31 @@
 npm install
 ```
 
+## 設定
+
+### 環境変数での設定（推奨）
+
+`.env.example` をコピーして `.env` ファイルを作成し、設定を変更してください：
+
+```bash
+cp .env.example .env
+```
+
+`.env` ファイルの例：
+```env
+# VOICEVOX API設定
+VOICEVOX_URL=http://localhost:50021
+
+# ベンチマーク設定
+TOTAL_REQUESTS=100
+CONCURRENT_REQUESTS=5
+REQUEST_INTERVAL=0
+```
+
+### コード内での設定
+
+または、`index.js` の設定セクションで直接値を変更することもできます。
+
 ## 使用方法
 
 ```bash
@@ -42,6 +67,17 @@ node index.js
 - **全体平均**: 1回の音声合成にかかる平均時間
 - **クエリ生成平均**: `/audio_query` APIの平均応答時間  
 - **音声合成平均**: `/synthesis` APIの平均応答時間
+
+## 環境変数
+
+以下の環境変数で設定を変更できます：
+
+| 変数名 | 説明 | デフォルト値 |
+|--------|------|-------------|
+| `VOICEVOX_URL` | VOICEVOX ENGINEのURL | `http://localhost:50021` |
+| `TOTAL_REQUESTS` | 実行する音声合成の総数 | `100` |
+| `CONCURRENT_REQUESTS` | 同時に実行するリクエスト数 | `5` |
+| `REQUEST_INTERVAL` | バッチ処理間の待機時間（ミリ秒） | `0` |
 
 ## 設定
 

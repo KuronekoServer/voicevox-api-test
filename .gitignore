@@ -4,5 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 benchmark_results.json
+.env
 .DS_Store
 Thumbs.db

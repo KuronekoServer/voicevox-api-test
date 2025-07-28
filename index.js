@@ -2,14 +2,17 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
+// 環境変数を読み込み
+require('dotenv').config();
+
 // === 設定 ===
-// VOICEVOX APIのベースURL
-const BASE_URL = 'https://32cc157f-1958-4b24-9e7e-61faf52b6256.8474987a-90ca-4a82-8897-e45aca7259e5.container.sakurausercontent.com';
+// VOICEVOX APIのベースURL（環境変数 VOICEVOX_URL が設定されていればそれを使用）
+const BASE_URL = process.env.VOICEVOX_URL || 'https://aa6066e2-b899-4034-af6a-0af3876391f6.132845ab-59d2-4120-a634-e3a69263fadc.container.sakurausercontent.com';
 
 // ベンチマーク設定
-const TOTAL_REQUESTS = 100;           // 総リクエスト数
-const CONCURRENT_REQUESTS = 5;        // 同時リクエスト数
-const REQUEST_INTERVAL = 100;         // バッチ間の待機時間（ミリ秒）
+const TOTAL_REQUESTS = parseInt(process.env.TOTAL_REQUESTS) || 100;           // 総リクエスト数
+const CONCURRENT_REQUESTS = parseInt(process.env.CONCURRENT_REQUESTS) || 5;        // 同時リクエスト数
+const REQUEST_INTERVAL = parseInt(process.env.REQUEST_INTERVAL) || 0;         // バッチ間の待機時間（ミリ秒）
 
 // 50文字程度の日本語文章のリスト
 const SAMPLE_TEXTS = [
@@ -164,6 +167,7 @@ class VoicevoxBenchmark {
     // ベンチマークを実行
     async runBenchmark() {
         console.log('=== VOICEVOX API ベンチマーク開始 ===');
+        console.log(`API URL: ${BASE_URL}`);
         console.log(`目標: ${TOTAL_REQUESTS}件の音声合成`);
         console.log(`同時リクエスト数: ${CONCURRENT_REQUESTS}`);
         console.log('');
