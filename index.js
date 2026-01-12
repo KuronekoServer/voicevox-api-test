@@ -7,7 +7,7 @@ require('dotenv').config();
 
 // === 設定 ===
 // VOICEVOX APIのベースURL（環境変数 VOICEVOX_URL が設定されていればそれを使用）
-const BASE_URL = process.env.VOICEVOX_URL || 'https://aa6066e2-b899-4034-af6a-0af3876391f6.132845ab-59d2-4120-a634-e3a69263fadc.container.sakurausercontent.com';
+const BASE_URL = process.env.VOICEVOX_URL || 'http://voicevox-02:50021';
 
 // ベンチマーク設定
 const TOTAL_REQUESTS = parseInt(process.env.TOTAL_REQUESTS) || 100;           // 総リクエスト数
@@ -32,6 +32,34 @@ class VoicevoxBenchmark {
     constructor() {
         this.speakers = [];
         this.results = [];
+        this.nextRequestIndex = 0;
+    }
+
+    // axiosエラーを読みやすい形に整形
+    formatAxiosError(error) {
+        const status = error?.response?.status;
+        let responseSnippet;
+
+        const data = error?.response?.data;
+        if (data != null) {
+            if (Buffer.isBuffer(data)) {
+                responseSnippet = data.toString('utf8').slice(0, 300);
+            } else if (typeof data === 'string') {
+                responseSnippet = data.slice(0, 300);
+            } else {
+                try {
+                    responseSnippet = JSON.stringify(data).slice(0, 300);
+                } catch {
+                    responseSnippet = String(data).slice(0, 300);
+                }
+            }
+        }
+
+        return {
+            status,
+            responseSnippet,
+            message: error?.message
+        };
     }
 
     // 利用可能な話者一覧を取得
@@ -100,21 +128,26 @@ class VoicevoxBenchmark {
     // 単一の音声合成処理
     async processSingleSynthesis(index) {
         const startTime = Date.now();
+        let text;
+        let speaker;
+        let stage = 'init';
         
         try {
             // ランダムなテキストと話者を選択
-            const text = this.getRandomText();
-            const speaker = this.getRandomSpeaker();
+            text = this.getRandomText();
+            speaker = this.getRandomSpeaker();
             
             console.log(`[${index + 1}/${TOTAL_REQUESTS}] 処理中: "${text.substring(0, 20)}..." (話者: ${speaker.speakerName} - ${speaker.styleName})`);
             
             // 音声クエリ生成
             const queryStartTime = Date.now();
+            stage = 'audio_query';
             const audioQuery = await this.createAudioQuery(text, speaker.speakerId);
             const queryTime = Date.now() - queryStartTime;
             
             // 音声合成
             const synthesisStartTime = Date.now();
+            stage = 'synthesis';
             const audioData = await this.synthesize(audioQuery, speaker.speakerId);
             const synthesisTime = Date.now() - synthesisStartTime;
             
@@ -139,15 +172,30 @@ class VoicevoxBenchmark {
             
         } catch (error) {
             const totalTime = Date.now() - startTime;
+            const axiosInfo = this.formatAxiosError(error);
+            const speakerInfo = speaker
+                ? ` (話者: ${speaker.speakerName} - ${speaker.styleName}, 話者ID: ${speaker.speakerId})`
+                : '';
+            const stageInfo = stage ? ` (stage: ${stage})` : '';
+            const statusInfo = axiosInfo.status ? ` (HTTP ${axiosInfo.status})` : '';
+            const responseInfo = axiosInfo.responseSnippet ? ` response: ${axiosInfo.responseSnippet}` : '';
+            const errorMessage = `${axiosInfo.message || error.message}`;
             const result = {
                 index: index + 1,
-                error: error.message,
+                text: text,
+                speakerId: speaker?.speakerId,
+                speakerName: speaker?.speakerName,
+                styleName: speaker?.styleName,
+                stage: stage,
+                error: errorMessage,
+                httpStatus: axiosInfo.status,
+                responseSnippet: axiosInfo.responseSnippet,
                 totalTime: totalTime,
                 success: false
             };
             
             this.results.push(result);
-            console.error(`[${index + 1}/${TOTAL_REQUESTS}] 失敗: ${error.message}`);
+            console.error(`[${index + 1}/${TOTAL_REQUESTS}] 失敗${stageInfo}${speakerInfo}: ${errorMessage}${statusInfo}${responseInfo}`);
             
             return result;
         }
@@ -158,7 +206,9 @@ class VoicevoxBenchmark {
         const promises = [];
         
         for (let i = 0; i < batchSize; i++) {
-            promises.push(this.processSingleSynthesis(this.results.length));
+            const index = this.nextRequestIndex;
+            this.nextRequestIndex += 1;
+            promises.push(this.processSingleSynthesis(index));
         }
         
         return await Promise.all(promises);
@@ -186,14 +236,14 @@ class VoicevoxBenchmark {
             console.log('音声合成処理を開始...');
             
             // 設定された件数になるまでバッチ処理
-            while (this.results.length < TOTAL_REQUESTS) {
-                const remaining = TOTAL_REQUESTS - this.results.length;
+            while (this.nextRequestIndex < TOTAL_REQUESTS) {
+                const remaining = TOTAL_REQUESTS - this.nextRequestIndex;
                 const batchSize = Math.min(CONCURRENT_REQUESTS, remaining);
                 
                 await this.processBatch(batchSize);
                 
                 // 少し間隔を空ける（サーバー負荷軽減）
-                if (this.results.length < TOTAL_REQUESTS) {
+                if (this.nextRequestIndex < TOTAL_REQUESTS) {
                     await new Promise(resolve => setTimeout(resolve, REQUEST_INTERVAL));
                 }
             }
@@ -245,7 +295,11 @@ class VoicevoxBenchmark {
             console.log('');
             console.log('=== エラー詳細 ===');
             failedResults.forEach(r => {
-                console.log(`[${r.index}] ${r.error}`);
+                const speakerId = r.speakerId ?? '-';
+                const httpStatus = r.httpStatus ?? '-';
+                const speakerName = r.speakerName ?? '-';
+                const styleName = r.styleName ?? '-';
+                console.log(`[${r.index}] 話者ID:${speakerId} HTTP:${httpStatus} ${speakerName}/${styleName} ${r.error}`);
             });
         }
         
